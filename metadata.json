@@ -1,0 +1,6 @@
+{
+  "name": "Engineering Drawing PDF Extraction System",
+  "description": "An advanced engineering document viewer & extractor with automated metadata parser, Bill of Material (BOM) structural analyzer, dynamic search, and Excel exporting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
