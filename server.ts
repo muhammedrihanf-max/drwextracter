@@ -305,6 +305,58 @@ app.post('/api/upload-pdf', upload.single('file'), async (req, res) => {
 });
 
 /**
+ * Text-based PDF extraction endpoint (bypasses payload upload size limits)
+ */
+app.post('/api/extract-text', express.json({ limit: '50mb' }), async (req, res) => {
+  try {
+    const { filename, pages } = req.body;
+    if (!pages || !Array.isArray(pages) || pages.length === 0) {
+      return res.status(400).json({ error: 'No PDF text pages provided.' });
+    }
+
+    const BATCH_SIZE = 5;
+    const extractedDrawings: any[] = [];
+
+    for (let i = 0; i < pages.length; i += BATCH_SIZE) {
+      const batch = pages.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map((pageText, j) =>
+          extractDrawingDataFromText(pageText, i + j + 1, filename || 'drawing.pdf')
+        )
+      );
+
+      for (const extracted of batchResults) {
+        const storedDrawing = db.saveDrawingWithBom(
+          {
+            pageNo: extracted.pageNo,
+            projectTitle: extracted.projectTitle,
+            drawingTitle: extracted.drawingTitle,
+            companyDrawingNo: extracted.companyDrawingNo,
+            contractorDrawingNo: extracted.contractorDrawingNo,
+            companyFileName: extracted.companyFileName,
+            confidenceScore: extracted.confidenceScore,
+            drawingType: extracted.drawingType,
+            pdfFileName: filename || 'drawing.pdf',
+          },
+          extracted.billOfMaterial,
+          true
+        );
+        extractedDrawings.push(storedDrawing);
+      }
+    }
+
+    res.json({
+      status: 'success',
+      drawings: extractedDrawings,
+    });
+  } catch (error: any) {
+    console.error('Core PDF text extraction pipeline failure:', error);
+    res.status(500).json({ error: error.message || 'Verification and OCR parsing failed' });
+  }
+});
+
+
+/**
  * Export Excel Endpoint
  */
 app.get('/api/export/excel', async (req, res) => {

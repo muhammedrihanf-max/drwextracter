@@ -94,25 +94,94 @@ export default function UploadView({ onUploadSuccess }: UploadViewProps) {
     setExtractedResult([]);
   };
 
+  // Helper to load PDF.js dynamically if not already loaded from CDN
+  const loadPdfJs = (): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      if ((window as any).pdfjsLib) {
+        resolve((window as any).pdfjsLib);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js';
+      script.onload = () => {
+        resolve((window as any).pdfjsLib);
+      };
+      script.onerror = (err) => {
+        reject(new Error("Failed to load PDF.js from CDN: " + err));
+      };
+      document.head.appendChild(script);
+    });
+  };
+
   const startExtraction = async () => {
     if (files.length === 0) return;
 
     setUploadState('uploading');
-    setProgress(15);
+    setProgress(5);
     setLogs([]);
-    addLog(`Initiating raw packet transfer for ${files[0].name} (${(files[0].size / (1024 * 1024)).toFixed(2)} MB)...`);
-
-    const formData = new FormData();
-    formData.append('file', files[0]);
+    addLog(`Initiating local client-side extraction for ${files[0].name} (${(files[0].size / (1024 * 1024)).toFixed(2)} MB)...`);
 
     try {
-      // Step 1: Upload and trigger parsing
-      addLog(`Sending engineering PDF to multi-page REST upload handler...`);
-      setProgress(35);
-      
-      const response = await fetch('/api/upload-pdf', {
+      addLog(`Loading PDF parser engine...`);
+      const pdfjsLib = await loadPdfJs();
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+      addLog(`Reading drawing file into memory buffer...`);
+      const arrayBuffer = await files[0].arrayBuffer();
+      setProgress(15);
+
+      addLog(`Initializing layout extraction...`);
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const totalPages = pdf.numPages;
+      addLog(`PDF loaded successfully. Total pages: ${totalPages}`);
+
+      const pagesText: string[] = [];
+
+      for (let i = 1; i <= totalPages; i++) {
+        addLog(`Extracting text structure from Page ${i}/${totalPages}...`);
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const items = textContent.items as any[];
+
+        // Group items by Y coordinate (rounded to integer)
+        const linesMap: { [key: number]: any[] } = {};
+        items.forEach(item => {
+          const y = Math.round(item.transform[5]);
+          if (!linesMap[y]) linesMap[y] = [];
+          linesMap[y].push(item);
+        });
+
+        // Sort Y coordinates descending (top to bottom)
+        const sortedY = Object.keys(linesMap).map(Number).sort((a, b) => b - a);
+        const pageLines: string[] = [];
+        sortedY.forEach(y => {
+          // Sort items on the same line by X coordinate (transform[4]) ascending (left to right)
+          const lineItems = linesMap[y].sort((a, b) => a.transform[4] - b.transform[4]);
+          const lineText = lineItems.map(item => item.str).join('\t');
+          pageLines.push(lineText);
+        });
+
+        const pageText = pageLines.join('\n');
+        pagesText.push(pageText);
+
+        // Update progress from 15% to 50% during local PDF parsing
+        setProgress(Math.round(15 + (i / totalPages) * 35));
+      }
+
+      setUploadState('processing');
+      setProgress(60);
+      addLog(`Client-side tabular text structure extraction complete!`);
+      addLog(`Sending extracted text pages to Gemini AI OCR engine...`);
+
+      const response = await fetch('/api/extract-text', {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          filename: files[0].name,
+          pages: pagesText,
+        }),
       });
 
       if (!response.ok) {
@@ -120,20 +189,14 @@ export default function UploadView({ onUploadSuccess }: UploadViewProps) {
         throw new Error(errObj.error || `HTTP error ${response.status}`);
       }
 
-      setUploadState('processing');
-      setProgress(60);
-      addLog(`Server file received. Page-by-page tabular parsing text extracts loaded.`);
-      addLog(`Feeding unstructured visual nodes to Gemini-3.5-Flash OCR engine...`);
-
-      const resData = await response.json();
-      
       setProgress(85);
+      const resData = await response.json();
       const drawings: DrawingWithBom[] = resData.drawings || [];
 
       // Log the structured page outputs
       drawings.forEach((dwg) => {
         addLog(`Page ${dwg.pageNo} compiled! Identified: [${dwg.drawingType}] Title: "${dwg.drawingTitle || 'N/A'}" | Drawing No: "${dwg.companyDrawingNo || 'N/A'}"`);
-        addLog(`-> Page ${dwg.pageNo} BOM: Loaded ${dwg.billOfMaterial?.length || 0} tabular physical component entries with ${(dwg.confidenceScore)}% accuracy score.`);
+        addLog(`-> Page ${dwg.pageNo} BOM: Loaded ${dwg.billOfMaterial?.length || 0} tabular physical component entries.`);
       });
 
       setProgress(100);
