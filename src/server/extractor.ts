@@ -6,7 +6,6 @@ const req = createRequire(
       ? __filename
       : 'file:///' + process.cwd() + '/server.cjs'
 );
-const { PDFParse } = req('pdf-parse');
 import { GoogleGenAI, Type } from '@google/genai';
 import { Drawing, BomItem, DrawingWithBom } from '../types.js';
 
@@ -85,6 +84,7 @@ export function extractMetadataHeuristics(text: string): Partial<Drawing> {
  */
 export async function extractPDFPagesText(buffer: Buffer): Promise<string[]> {
   try {
+    const { PDFParse } = req('pdf-parse');
     const parser = new PDFParse({ data: buffer });
     const textResult = await parser.getText();
     return textResult.pages.map((page: any) => page.text);
