@@ -25,7 +25,6 @@ dotenv.config({ path: path.resolve(getAppRoot(), '.env') });
 import express from 'express';
 import multer from 'multer';
 import fs from 'fs';
-import { createServer as createViteServer } from 'vite';
 import { db } from './src/server/db.js';
 import { extractPDFPagesText, extractDrawingDataFromText } from './src/server/extractor.js';
 import { generateExcelWorkbook, generateCSVContent } from './src/server/export.js';
@@ -367,6 +366,7 @@ const isProduction = process.env.NODE_ENV === 'production' ||
 async function startServer() {
   if (!isProduction) {
     // Development Environment: Mount Vite in middleware mode
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
