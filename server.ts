@@ -21,7 +21,12 @@ if (typeof global !== 'undefined') {
   }
 }
 
-const pdf = customRequire('pdf-parse');
+// Import worker first to ensure all required canvas/DOMMatrix polyfills are set up properly
+try {
+  customRequire('pdf-parse/worker');
+} catch (err) {
+  console.warn("Failed to pre-load pdf-parse/worker:", err);
+}
 
 const app = express();
 const PORT = 3000;
@@ -742,6 +747,14 @@ app.post('/api/drawings/process', async (req: Request, res: Response) => {
         let parsedText = "";
         try {
           const { PDFParse } = customRequire('pdf-parse');
+          const { pathToFileURL } = customRequire('url');
+          try {
+            const workerPath = customRequire.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
+            const workerUrl = pathToFileURL(workerPath).href;
+            PDFParse.setWorker(workerUrl);
+          } catch (e) {
+            console.warn("Failed to set worker via require.resolve:", e);
+          }
           const parser = new PDFParse({ data: pagePdfBuffer });
           const res = await parser.getText();
           parsedText = res.text || "";
@@ -764,6 +777,14 @@ app.post('/api/drawings/process', async (req: Request, res: Response) => {
           try {
             updateJobLogs(`[Page ${pageNum}] Rendering offline sheet image for QR detection...`, 'ocr_qr');
             const { PDFParse } = customRequire('pdf-parse');
+            const { pathToFileURL } = customRequire('url');
+            try {
+              const workerPath = customRequire.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
+              const workerUrl = pathToFileURL(workerPath).href;
+              PDFParse.setWorker(workerUrl);
+            } catch (e) {
+              console.warn("Failed to set worker via require.resolve:", e);
+            }
             const jsQR = customRequire('jsqr');
             const { PNG } = customRequire('pngjs');
             
