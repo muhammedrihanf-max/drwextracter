@@ -21,12 +21,9 @@ if (typeof global !== 'undefined') {
   }
 }
 
-// Import worker first to ensure all required canvas/DOMMatrix polyfills are set up properly
-try {
-  customRequire('pdf-parse/worker');
-} catch (err) {
-  console.warn("Failed to pre-load pdf-parse/worker:", err);
-}
+// Statically import pdf-parse and its worker to force Vercel NFT bundling and prevent pruning
+import 'pdf-parse/worker';
+import 'pdf-parse';
 
 const app = express();
 const PORT = 3000;
