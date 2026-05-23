@@ -7,6 +7,7 @@ coverage/
 .env*
 !.env.example
 uploads/
-
-
-.vercel
+dist-electron/
+*.pdf
+database.json
+desktop.ini

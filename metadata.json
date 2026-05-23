@@ -1,6 +1,6 @@
 {
-  "name": "Engineering Drawing PDF Extraction System",
-  "description": "An advanced engineering document viewer & extractor with automated metadata parser, Bill of Material (BOM) structural analyzer, dynamic search, and Excel exporting.",
+  "name": "AI Engineering Drawing & Spool Management System",
+  "description": "Enterprise-grade industrial document intelligence platform for PDF drawing splitting, auto-rotation, CAD vector navigation, and OCR/QR spool recognition.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
