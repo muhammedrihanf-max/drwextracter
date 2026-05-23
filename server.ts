@@ -7,6 +7,20 @@ import { Spool, ProcessingJob, License, User, UserLog } from './src/types.js';
 import { PDFDocument, degrees } from 'pdf-lib';
 import { createRequire } from 'module';
 const customRequire = typeof require !== 'undefined' ? require : createRequire(import.meta.url);
+
+// Polyfill DOMMatrix and Canvas APIs for Vercel/Node environment to prevent pdf-parse crash
+if (typeof global !== 'undefined') {
+  if (!(global as any).DOMMatrix) {
+    (global as any).DOMMatrix = class DOMMatrix {};
+  }
+  if (!(global as any).ImageData) {
+    (global as any).ImageData = class ImageData {};
+  }
+  if (!(global as any).Path2D) {
+    (global as any).Path2D = class Path2D {};
+  }
+}
+
 const pdf = customRequire('pdf-parse');
 
 const app = express();
@@ -727,7 +741,7 @@ app.post('/api/drawings/process', async (req: Request, res: Response) => {
         // 1. Try pdf-parse vector text extraction first
         let parsedText = "";
         try {
-          const { PDFParse } = require('pdf-parse');
+          const { PDFParse } = customRequire('pdf-parse');
           const parser = new PDFParse({ data: pagePdfBuffer });
           const res = await parser.getText();
           parsedText = res.text || "";
@@ -749,9 +763,9 @@ app.post('/api/drawings/process', async (req: Request, res: Response) => {
         if (!spoolNumber) {
           try {
             updateJobLogs(`[Page ${pageNum}] Rendering offline sheet image for QR detection...`, 'ocr_qr');
-            const { PDFParse } = require('pdf-parse');
-            const jsQR = require('jsqr');
-            const { PNG } = require('pngjs');
+            const { PDFParse } = customRequire('pdf-parse');
+            const jsQR = customRequire('jsqr');
+            const { PNG } = customRequire('pngjs');
             
             const parser = new PDFParse({ data: pagePdfBuffer });
             const screenshotResult = await parser.getScreenshot({
